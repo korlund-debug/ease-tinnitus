@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EaseTinnitus — Sound Therapy</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2A9D8F">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <button class="back" onclick="location.href='home.html'">←</button>
+    <h1>Sound Therapy</h1>
+  </div>
+  <div class="content">
+
+    <div id="device-banner" class="banner warn" style="display:none;">
+      🔈 Switched speakers or headphones since your last visit? Frequencies can sound different on
+      different devices — consider <a href="pitch-match.html" style="text-decoration:underline; font-weight:800;">re-matching your pitch</a>.
+    </div>
+
+    <div class="chip-row" id="mode-chips">
+      <button class="chip selected" data-mode="white">White Noise</button>
+      <button class="chip" data-mode="pink">Pink Noise</button>
+      <button class="chip" data-mode="notch">Notched (personalized)</button>
+      <button class="chip" data-mode="wave">Ocean Waves</button>
+    </div>
+
+    <p id="mode-desc" style="font-size:12.5px; color:var(--text-muted); margin: 10px 2px 0;"></p>
+
+    <button class="play-toggle" id="play-btn" style="margin-top:30px;" onclick="togglePlay()">▶</button>
+    <div class="timer-sub" id="play-status">Tap to start</div>
+
+    <div class="volume-row">
+      <span class="icon">🔉</span>
+      <input type="range" id="volume-slider" min="0" max="100" value="45">
+      <span class="icon">🔊</span>
+    </div>
+
+    <div class="section-title">Sleep Timer</div>
+    <div class="chip-row" id="timer-chips">
+      <button class="chip selected" data-mins="0">Off</button>
+      <button class="chip" data-mins="15">15 min</button>
+      <button class="chip" data-mins="30">30 min</button>
+      <button class="chip" data-mins="60">60 min</button>
+    </div>
+
+    <div class="usage-card">
+      <div class="head">💡 Suggested Use</div>
+      <p>
+        Many people use sound therapy for 30–90 minutes a day, or overnight while sleeping. Start at a
+        comfortable volume — around or just below the loudness of your tinnitus, never uncomfortably
+        loud. There's no single "right" amount; consistency tends to matter more than duration.
+      </p>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a class="nav-item" href="home.html"><span class="icon">🏠</span>Home</a>
+    <a class="nav-item active" href="sound-therapy.html"><span class="icon">🔊</span>Therapy</a>
+    <a class="nav-item" href="residual-inhibition.html"><span class="icon">⏱️</span>RI Test</a>
+    <a class="nav-item" href="about.html"><span class="icon">ℹ️</span>About</a>
+  </nav>
+</div>
+
+<script>
+let audioCtx = null;
+let source = null, filterA = null, filterB = null, gainNode = null;
+let isPlaying = false;
+let sleepTimeout = null;
+let currentMode = 'white';
+const matchedFreq = Number(localStorage.getItem('easeTinnitus_pitch') || 4000);
+
+const MODE_DESC = {
+  white: 'Even energy across all frequencies — a steady, neutral background hiss.',
+  pink: 'Deeper and softer than white noise, with more low-frequency energy.',
+  notch: matchedFreq
+    ? `Broadband noise with a narrow dip removed around ${matchedFreq} Hz, based on your last pitch match.`
+    : 'Broadband noise with a dip removed around your matched pitch. Run Pitch Match first to personalize this.',
+  wave: 'Slow, rolling filtered noise meant to evoke ocean-like waves.'
+};
+
+function updateDesc() {
+  document.getElementById('mode-desc').textContent = MODE_DESC[currentMode];
+}
+
+document.querySelectorAll('#mode-chips .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#mode-chips .chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    currentMode = chip.dataset.mode;
+    updateDesc();
+    if (isPlaying) { stopAudio(); startAudio(); }
+  });
+});
+
+document.querySelectorAll('#timer-chips .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#timer-chips .chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    const mins = Number(chip.dataset.mins);
+    if (sleepTimeout) { clearTimeout(sleepTimeout); sleepTimeout = null; }
+    if (isPlaying && mins > 0) {
+      sleepTimeout = setTimeout(() => stopAudio(), mins * 60 * 1000);
+    }
+  });
+});
+
+function ensureCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function buildNoiseBuffer(ctx, seconds, colorFn) {
+  const bufferSize = ctx.sampleRate * seconds;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  if (!colorFn) {
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  } else {
+    // Simple pink-ish coloring via cumulative averaging (Voss-like approximation).
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99765 * b0 + white * 0.0990460;
+      b1 = 0.96300 * b1 + white * 0.2965164;
+      b2 = 0.57000 * b2 + white * 1.0526913;
+      data[i] = (b0 + b1 + b2 + white * 0.1848) * 0.2;
+    }
+  }
+  return buffer;
+}
+
+function startAudio() {
+  const ctx = ensureCtx();
+  source = ctx.createBufferSource();
+  const pink = currentMode === 'pink' || currentMode === 'wave';
+  source.buffer = buildNoiseBuffer(ctx, 4, pink);
+  source.loop = true;
+
+  gainNode = ctx.createGain();
+  const vol = Number(document.getElementById('volume-slider').value) / 100;
+  gainNode.gain.value = 0.0001;
+
+  let node = source;
+  if (currentMode === 'notch' && matchedFreq) {
+    filterA = ctx.createBiquadFilter();
+    filterA.type = 'notch';
+    filterA.frequency.value = matchedFreq;
+    filterA.Q.value = 2.2;
+    node = node.connect(filterA);
+  } else if (currentMode === 'wave') {
+    filterA = ctx.createBiquadFilter();
+    filterA.type = 'lowpass';
+    filterA.frequency.value = 900;
+    node = node.connect(filterA);
+    filterB = ctx.createBiquadFilter();
+    filterB.type = 'lowshelf';
+    filterB.frequency.value = 250;
+    filterB.gain.value = 6;
+    node = node.connect(filterB);
+  }
+  node.connect(gainNode).connect(ctx.destination);
+  source.start();
+  gainNode.gain.exponentialRampToValueAtTime(Math.max(0.02, vol * 0.7), ctx.currentTime + 0.5);
+}
+
+function stopAudio() {
+  if (gainNode && audioCtx) {
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
+  }
+  if (source) { try { source.stop(audioCtx.currentTime + 0.45); } catch (e) {} }
+  source = null;
+  isPlaying = false;
+  document.getElementById('play-btn').textContent = '▶';
+  document.getElementById('play-btn').classList.remove('playing');
+  document.getElementById('play-status').textContent = 'Tap to start';
+  if (sleepTimeout) { clearTimeout(sleepTimeout); sleepTimeout = null; }
+}
+
+function togglePlay() {
+  if (isPlaying) { stopAudio(); return; }
+  startAudio();
+  isPlaying = true;
+  document.getElementById('play-btn').textContent = '❚❚';
+  document.getElementById('play-btn').classList.add('playing');
+  document.getElementById('play-status').textContent = 'Playing…';
+  const activeTimerChip = document.querySelector('#timer-chips .chip.selected');
+  const mins = Number(activeTimerChip ? activeTimerChip.dataset.mins : 0);
+  if (mins > 0) sleepTimeout = setTimeout(() => stopAudio(), mins * 60 * 1000);
+}
+
+document.getElementById('volume-slider').addEventListener('input', (e) => {
+  if (gainNode && audioCtx) {
+    const vol = Number(e.target.value) / 100;
+    gainNode.gain.setTargetAtTime(Math.max(0.0001, vol * 0.7), audioCtx.currentTime, 0.1);
+  }
+});
+
+// Device-switch reminder: show if it's been a while since the last pitch match, or none exists.
+(function () {
+  const last = localStorage.getItem('easeTinnitus_pitch');
+  document.getElementById('device-banner').style.display = last ? 'none' : 'block';
+})();
+
+updateDesc();
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+</script>
+</body>
+</html>

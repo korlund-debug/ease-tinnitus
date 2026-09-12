@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EaseTinnitus</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2A9D8F">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <div class="splash-wrap">
+    <div class="splash-logo-badge"><img src="icons/icon.svg" alt="EaseTinnitus logo"></div>
+    <div class="splash-name">EaseTinnitus</div>
+    <div class="splash-tagline">
+      Sound therapy and self-guided tools that help many people manage tinnitus.
+    </div>
+
+    <div class="banner" style="text-align:left;">
+      <strong>Please note:</strong> EaseTinnitus is an independent wellness tool, not a medical device.
+      It doesn't diagnose or cure tinnitus — it offers sound-based techniques some people find helpful
+      for managing how noticeable their tinnitus feels. Results vary from person to person. If your
+      tinnitus is sudden, one-sided, or comes with hearing loss, dizziness, or pain, please see a
+      doctor or audiologist.
+    </div>
+
+    <button class="btn btn-primary" onclick="getStarted()">Get Started</button>
+  </div>
+</div>
+
+<script>
+  function getStarted() {
+    try { localStorage.setItem('easeTinnitus_visited', '1'); } catch (e) {}
+    window.location.href = 'home.html';
+  }
+  // Skip the splash on return visits.
+  try {
+    if (localStorage.getItem('easeTinnitus_visited') === '1') {
+      window.location.href = 'home.html';
+    }
+  } catch (e) {}
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>

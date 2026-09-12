@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EaseTinnitus — About &amp; Safety</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2A9D8F">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <button class="back" onclick="location.href='home.html'">←</button>
+    <h1>About &amp; Safety</h1>
+  </div>
+  <div class="content">
+
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">What Is Tinnitus?</div>
+      <p style="font-size:13.5px; line-height:1.6; color:var(--text-muted); margin:0;">
+        Tinnitus is the perception of sound — often a ringing, buzzing, or hissing — without an outside
+        source producing it. It's very common and is usually not itself dangerous, though it can be
+        distracting or distressing. It's often linked to changes in the hearing system, but its exact
+        cause varies from person to person.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">What This App Does — and Doesn't</div>
+      <p style="font-size:13.5px; line-height:1.6; color:var(--text-muted); margin:0 0 10px;">
+        EaseTinnitus offers three self-guided, sound-based tools — pitch matching, sound therapy, and a
+        residual inhibition test — built on techniques used broadly in tinnitus self-management. Many
+        people find sound-based approaches like these helpful for making their tinnitus less noticeable
+        day to day.
+      </p>
+      <p style="font-size:13.5px; line-height:1.6; color:var(--text-muted); margin:0;">
+        <strong>It does not diagnose, treat, or cure tinnitus or any hearing condition,</strong> and it
+        is not a substitute for professional care. It is not a medical device. Individual results vary,
+        and some people won't notice any effect.
+      </p>
+    </div>
+
+    <div class="banner warn">
+      <strong>See a doctor or audiologist</strong> if your tinnitus started suddenly, affects only one
+      ear, came with hearing loss, dizziness, or pain, or is getting noticeably worse — these can need
+      prompt evaluation.
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">Your Data</div>
+      <p style="font-size:13.5px; line-height:1.6; color:var(--text-muted); margin:0 0 14px;">
+        Everything you enter — your matched pitch and loudness, and your session history — is stored
+        only in your browser on this device. Nothing is uploaded or sent anywhere. Clearing your
+        browser data, or the button below, will erase it.
+      </p>
+      <button class="btn btn-secondary" onclick="clearData()">Clear My Data</button>
+    </div>
+
+    <p class="disclaimer-fine">
+      EaseTinnitus is an independent project created for general wellness and educational purposes.
+      It is not affiliated with any hospital, clinic, or commercial audiology product.
+    </p>
+  </div>
+
+  <nav class="bottom-nav">
+    <a class="nav-item" href="home.html"><span class="icon">🏠</span>Home</a>
+    <a class="nav-item" href="sound-therapy.html"><span class="icon">🔊</span>Therapy</a>
+    <a class="nav-item" href="residual-inhibition.html"><span class="icon">⏱️</span>RI Test</a>
+    <a class="nav-item active" href="about.html"><span class="icon">ℹ️</span>About</a>
+  </nav>
+</div>
+
+<script>
+function clearData() {
+  if (confirm('This will erase your saved pitch match and session history from this device. Continue?')) {
+    try { localStorage.clear(); } catch (e) {}
+    alert('Your data has been cleared.');
+  }
+}
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+</script>
+</body>
+</html>

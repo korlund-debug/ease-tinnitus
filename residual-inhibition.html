@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EaseTinnitus — Residual Inhibition</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2A9D8F">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <button class="back" onclick="location.href='home.html'">←</button>
+    <h1>Residual Inhibition</h1>
+  </div>
+  <div class="content">
+
+    <!-- Setup -->
+    <div id="setup-view">
+      <div class="banner">
+        Residual inhibition is a temporary quieting — or brief stopping — of tinnitus that some people
+        notice after listening to matching sound for a short period. Not everyone experiences it, and
+        any effect is usually short-lived.
+      </div>
+
+      <div class="section-title" style="margin-top:0;">Test Duration</div>
+      <div class="chip-row" id="duration-picker">
+        <button class="chip" data-secs="60">1 min</button>
+        <button class="chip selected" data-secs="120">2 min</button>
+        <button class="chip" data-secs="300">5 min</button>
+        <button class="chip" data-secs="600">10 min</button>
+        <button class="chip" data-secs="1800">30 min</button>
+      </div>
+
+      <button class="btn btn-primary" id="start-btn" style="margin-top:22px;" onclick="beginTest()">Start 2 min Session</button>
+
+      <div class="usage-card">
+        <div class="head">⏱️ Recommended Usage</div>
+        <p>
+          Try this once or twice a day at most. Listening at a comfortable volume matters more than
+          listening longer — turning it up won't make the effect stronger and can be uncomfortable.
+        </p>
+      </div>
+
+      <div id="history-note" style="font-size:12px; color:var(--text-faint); text-align:center; margin-top:16px;"></div>
+    </div>
+
+    <!-- Running -->
+    <div id="running-view" style="display:none; text-align:center;">
+      <div class="big-timer" id="timer">02:00</div>
+      <div class="timer-sub">Listening… stay relaxed and comfortable.</div>
+      <button class="btn btn-secondary" onclick="cancelTest()">Stop Early</button>
+    </div>
+
+    <!-- Rating -->
+    <div id="rating-view" style="display:none;">
+      <div class="step-title" style="text-align:center;">How does your tinnitus sound right now?</div>
+      <div class="rating-row" id="rating-row">
+        <div class="rating-face" data-rating="4"><span class="emoji">😀</span><span class="label">Much quieter</span></div>
+        <div class="rating-face" data-rating="3"><span class="emoji">🙂</span><span class="label">Slightly quieter</span></div>
+        <div class="rating-face" data-rating="2"><span class="emoji">😐</span><span class="label">No change</span></div>
+        <div class="rating-face" data-rating="1"><span class="emoji">🙁</span><span class="label">Slightly louder</span></div>
+      </div>
+      <button class="btn btn-primary" id="submit-rating" disabled onclick="submitRating()">Save Result</button>
+    </div>
+
+    <!-- Result -->
+    <div id="result-view" style="display:none; text-align:center;">
+      <div style="font-size:44px; margin-bottom:10px;" id="result-emoji">🙂</div>
+      <div class="step-title" id="result-title">Logged</div>
+      <p class="step-desc" id="result-text"></p>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="location.href='home.html'">Home</button>
+        <button class="btn btn-primary" onclick="resetToSetup()">Test Again</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a class="nav-item" href="home.html"><span class="icon">🏠</span>Home</a>
+    <a class="nav-item" href="sound-therapy.html"><span class="icon">🔊</span>Therapy</a>
+    <a class="nav-item active" href="residual-inhibition.html"><span class="icon">⏱️</span>RI Test</a>
+    <a class="nav-item" href="about.html"><span class="icon">ℹ️</span>About</a>
+  </nav>
+</div>
+
+<script>
+const matchedFreq = Number(localStorage.getItem('easeTinnitus_pitch') || 4000);
+let audioCtx, noiseSource, bandFilter, gainNode;
+let selectedDuration = 120;
+let remaining = 120;
+let countdownId = null;
+
+function formatDuration(secs) {
+  return secs < 60 ? secs + 's' : (secs % 60 === 0 ? (secs / 60) + ' min' : Math.round(secs / 60) + ' min');
+}
+function formatClock(secs) {
+  const m = String(Math.floor(secs / 60)).padStart(2, '0');
+  const s = String(secs % 60).padStart(2, '0');
+  return m + ':' + s;
+}
+function updateStartLabel() {
+  document.getElementById('start-btn').textContent = 'Start ' + formatDuration(selectedDuration) + ' Session';
+}
+document.querySelectorAll('#duration-picker .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#duration-picker .chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    selectedDuration = Number(chip.dataset.secs);
+    updateStartLabel();
+  });
+});
+
+function buildNoiseBuffer(ctx, seconds) {
+  const bufferSize = ctx.sampleRate * seconds;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+function startAudio(durationSecs) {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  noiseSource = audioCtx.createBufferSource();
+  // Loop a short buffer rather than allocating one sized to the full session,
+  // so long sessions (e.g. 30 min) don't need a huge in-memory buffer.
+  noiseSource.buffer = buildNoiseBuffer(audioCtx, Math.min(durationSecs + 1, 20));
+  noiseSource.loop = true;
+
+  bandFilter = audioCtx.createBiquadFilter();
+  bandFilter.type = 'bandpass';
+  bandFilter.frequency.value = matchedFreq;
+  bandFilter.Q.value = 1.2;
+
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = 0.0001;
+
+  noiseSource.connect(bandFilter).connect(gainNode).connect(audioCtx.destination);
+  noiseSource.start();
+  gainNode.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.4);
+}
+
+function stopAudio() {
+  if (gainNode && audioCtx) {
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+  }
+  if (noiseSource) { try { noiseSource.stop(audioCtx.currentTime + 0.35); } catch (e) {} }
+}
+
+function showView(id) {
+  ['setup-view', 'running-view', 'rating-view', 'result-view'].forEach(v => {
+    document.getElementById(v).style.display = (v === id) ? 'block' : 'none';
+  });
+}
+
+function beginTest() {
+  remaining = selectedDuration;
+  document.getElementById('timer').textContent = formatClock(remaining);
+  showView('running-view');
+  startAudio(selectedDuration);
+  countdownId = setInterval(() => {
+    remaining--;
+    document.getElementById('timer').textContent = formatClock(remaining);
+    if (remaining <= 0) {
+      clearInterval(countdownId);
+      stopAudio();
+      showView('rating-view');
+    }
+  }, 1000);
+}
+
+function cancelTest() {
+  clearInterval(countdownId);
+  stopAudio();
+  showView('setup-view');
+}
+
+let chosenRating = null;
+document.querySelectorAll('.rating-face').forEach(face => {
+  face.addEventListener('click', () => {
+    document.querySelectorAll('.rating-face').forEach(f => f.classList.remove('selected'));
+    face.classList.add('selected');
+    chosenRating = Number(face.dataset.rating);
+    document.getElementById('submit-rating').disabled = false;
+  });
+});
+
+const RATING_COPY = {
+  4: { emoji: '😀', title: 'Great to hear', text: 'Some people get a temporary quiet spell after a session like this. Any effect is usually short — feel free to repeat later.' },
+  3: { emoji: '🙂', title: 'Nice, some easing', text: 'A slight easing is a common response. Effects are typically temporary, so consider this alongside regular sound therapy.' },
+  2: { emoji: '😐', title: 'No change — that\'s okay', text: 'Not everyone notices a change after residual inhibition, and that\'s completely normal. Sound therapy on its own schedule can still help.' },
+  1: { emoji: '🙁', title: 'Logged', text: 'A brief increase can happen occasionally and typically settles back down. If it persists or bothers you, take a break from this test.' }
+};
+
+function submitRating() {
+  let count = 0;
+  try { count = Number(localStorage.getItem('easeTinnitus_riCount') || 0) + 1; localStorage.setItem('easeTinnitus_riCount', String(count)); } catch (e) {}
+  const copy = RATING_COPY[chosenRating] || RATING_COPY[2];
+  document.getElementById('result-emoji').textContent = copy.emoji;
+  document.getElementById('result-title').textContent = copy.title;
+  document.getElementById('result-text').textContent = copy.text;
+  showView('result-view');
+}
+
+function resetToSetup() {
+  chosenRating = null;
+  document.querySelectorAll('.rating-face').forEach(f => f.classList.remove('selected'));
+  document.getElementById('submit-rating').disabled = true;
+  showView('setup-view');
+}
+
+(function () {
+  try {
+    const count = Number(localStorage.getItem('easeTinnitus_riCount') || 0);
+    if (count > 0) document.getElementById('history-note').textContent = `You've logged ${count} session${count === 1 ? '' : 's'} so far.`;
+  } catch (e) {}
+})();
+
+updateStartLabel();
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+</script>
+</body>
+</html>

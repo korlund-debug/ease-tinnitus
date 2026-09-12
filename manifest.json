@@ -1,0 +1,14 @@
+{
+  "name": "EaseTinnitus",
+  "short_name": "EaseTinnitus",
+  "description": "Sound therapy and self-guided tools that help many people manage tinnitus.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F3EE",
+  "theme_color": "#2A9D8F",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
