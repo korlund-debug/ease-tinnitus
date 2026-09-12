@@ -2,6 +2,8 @@
 
 Sound therapy and self-guided tools that help many people manage tinnitus.
 
+**Live:** https://ease.npgsystems.ca
+
 EaseTinnitus is a small, installable web app (PWA) with three self-guided tools:
 
 - **Pitch & Loudness Match** — a 4-step self-test to find the tone that best matches your tinnitus.
