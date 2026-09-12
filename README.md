@@ -33,3 +33,8 @@ own device — nothing is sent to a server.
 
 Vanilla HTML/CSS/JS, Web Audio API for all sound generation, a manifest + service worker for
 installable/offline PWA behavior (network-first, cache fallback).
+
+## License
+
+All rights reserved — see [LICENSE](LICENSE). The source is public for reference, but redistribution,
+modification, or reuse is not permitted without permission from the copyright holder.
